@@ -32,13 +32,13 @@ const ModeSelector = ({ activeMode, onModeChange }: ModeSelectorProps) => {
           <button
             key={mode.id}
             onClick={() => onModeChange(mode.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-150 border border-transparent ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-150 border border-transparent btn-glow ${
               isActive
                 ? "mode-tab-active"
                 : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
             }`}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className={`w-4 h-4 icon-glow ${isActive ? "text-primary" : ""}`} />
             {mode.label}
           </button>
         );

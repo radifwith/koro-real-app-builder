@@ -37,35 +37,37 @@ const InputBar = ({ onSend, onVoiceActivate, activeMode }: InputBarProps) => {
   };
 
   return (
-    <div className="h-14 px-3 flex items-center gap-2 glass-card border-t border-border/50">
-      <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground glass-card-hover transition-colors duration-120">
-        <Paperclip className="w-5 h-5" />
-      </button>
-
-      <input
-        type="text"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholders[activeMode]}
-        className="flex-1 bg-transparent text-foreground text-[15px] placeholder:text-muted-foreground/60 outline-none"
-      />
-
-      {activeMode === "voice" || !text.trim() ? (
-        <button
-          onClick={onVoiceActivate}
-          className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary/20 text-primary hover:bg-primary/30 transition-all duration-120 glow-blue"
-        >
-          <Mic className="w-5 h-5" />
+    <div className="px-3 pb-3 pt-1">
+      <div className="flex items-center gap-2 glass-card rounded-2xl px-3 py-2 border border-border/50">
+        <button className="w-9 h-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground btn-glow transition-colors duration-120">
+          <Paperclip className="w-5 h-5 icon-glow" />
         </button>
-      ) : (
-        <button
-          onClick={handleSend}
-          className="w-9 h-9 rounded-lg flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-120 glow-blue"
-        >
-          <Send className="w-5 h-5" />
-        </button>
-      )}
+
+        <input
+          type="text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholders[activeMode]}
+          className="flex-1 bg-transparent text-foreground text-[15px] placeholder:text-muted-foreground/60 outline-none"
+        />
+
+        {activeMode === "voice" || !text.trim() ? (
+          <button
+            onClick={onVoiceActivate}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-primary/20 text-primary hover:bg-primary/30 transition-all duration-120 btn-glow glow-blue"
+          >
+            <Mic className="w-5 h-5 icon-glow" />
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-120 btn-glow glow-blue"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 };
