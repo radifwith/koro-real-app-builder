@@ -6,7 +6,7 @@ import SearchResultCard from "./SearchResultCard";
 import QuizCard from "./QuizCard";
 import CodeBlock from "./CodeBlock";
 import VoiceOverlay from "./VoiceOverlay";
-import { Sparkles } from "lucide-react";
+import raxzenLogo from "@/assets/raxzen-logo.png";
 
 interface ChatAreaProps {
   messages: Message[];
@@ -40,16 +40,14 @@ const ChatArea = ({ messages, isTyping, activeMode, voiceActive, onVoiceClose }:
   const emptyState = modeEmptyStates[activeMode];
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-hide relative">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2 scrollbar-hide relative">
       {voiceActive && <VoiceOverlay onClose={onVoiceClose} />}
 
       {messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center glow-blue">
-            <Sparkles className="w-8 h-8 text-primary" />
-          </div>
+          <img src={raxzenLogo} alt="Raxzen AI" className="w-20 h-20 rounded-2xl glow-blue animate-pulse" />
           <div>
-            <h2 className="text-xl font-semibold text-foreground mb-1">{emptyState.title}</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-1 text-glow">{emptyState.title}</h2>
             <p className="text-sm text-muted-foreground">{emptyState.subtitle}</p>
           </div>
         </div>
