@@ -9,9 +9,11 @@ import { useTheme, type ThemeMode } from "@/contexts/ThemeContext";
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onClearHistory: () => void;
 }
 
 const PRIVACY_URL = "https://www.termsfeed.com/live/27c8a172-0ab3-4366-beaf-f910b091110b";
+const FEEDBACK_EMAIL = "radidmondal@gmail.com";
 
 const languages = [
   { code: "en", label: "English" },
@@ -24,12 +26,19 @@ const languages = [
   { code: "fr", label: "Français" },
 ];
 
-const SettingsPanel = ({ isOpen, onClose }: SettingsPanelProps) => {
+const ABOUT_TEXT = `Raxzen AI is a next-generation intelligent assistant designed to make learning, creativity, and productivity faster and smarter. Powered by advanced AI technology, it helps you chat, research, generate ideas, and explore knowledge in a simple and modern environment.
+
+With a clean interface, powerful tools, and a futuristic design, Raxzen AI aims to give users a smooth and premium experience similar to top AI platforms. Whether you want to study, create content, or discover new information, Raxzen AI is built to assist you with speed, accuracy, and style.
+
+Our mission is to make AI easy, accessible, and inspiring for everyone — combining smart technology with a beautiful, user-friendly design.`;
+
+const SettingsPanel = ({ isOpen, onClose, onClearHistory }: SettingsPanelProps) => {
   const { theme, setTheme } = useTheme();
   const [selectedLang, setSelectedLang] = useState("en");
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [autoSave, setAutoSave] = useState(true);
+  const [showAbout, setShowAbout] = useState(false);
 
   if (!isOpen) return null;
 
@@ -40,6 +49,10 @@ const SettingsPanel = ({ isOpen, onClose }: SettingsPanelProps) => {
   ];
 
   const currentLangLabel = languages.find((l) => l.code === selectedLang)?.label || "English";
+
+  const handleFeedback = () => {
+    window.open(`mailto:${FEEDBACK_EMAIL}?subject=Raxzen AI Feedback`, "_blank");
+  };
 
   return (
     <>
@@ -118,18 +131,8 @@ const SettingsPanel = ({ isOpen, onClose }: SettingsPanelProps) => {
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Preferences</label>
             <div className="space-y-1">
-              <ToggleItem
-                icon={Bell}
-                label="Notifications"
-                enabled={notifications}
-                onToggle={() => setNotifications(!notifications)}
-              />
-              <ToggleItem
-                icon={Download}
-                label="Auto-save Chats"
-                enabled={autoSave}
-                onToggle={() => setAutoSave(!autoSave)}
-              />
+              <ToggleItem icon={Bell} label="Notifications" enabled={notifications} onToggle={() => setNotifications(!notifications)} />
+              <ToggleItem icon={Download} label="Auto-save Chats" enabled={autoSave} onToggle={() => setAutoSave(!autoSave)} />
             </div>
           </div>
 
@@ -137,16 +140,23 @@ const SettingsPanel = ({ isOpen, onClose }: SettingsPanelProps) => {
           <div>
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">General</label>
             <div className="space-y-1">
-              <SettingsItem icon={Trash2} label="Clear History" />
+              <SettingsItem icon={Trash2} label="Clear History" onClick={onClearHistory} />
               <SettingsItem icon={Star} label="Rate App" />
-              <SettingsItem icon={MessageSquare} label="Send Feedback" />
+              <SettingsItem icon={MessageSquare} label="Send Feedback" onClick={handleFeedback} />
               <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
                 <SettingsItem icon={Shield} label="Privacy Policy" trailing={<ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />} />
               </a>
-              <SettingsItem icon={Info} label="About" />
-              <SettingsItem icon={LogOut} label="Logout" danger />
+              <SettingsItem icon={Info} label="About" onClick={() => setShowAbout(!showAbout)} />
             </div>
           </div>
+
+          {/* About Section */}
+          {showAbout && (
+            <div className="rounded-xl glass-card p-4 animate-fade-in border border-border/50">
+              <h3 className="text-sm font-semibold text-foreground mb-2 text-glow">About Raxzen AI</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{ABOUT_TEXT}</p>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border/30 text-center">
@@ -157,21 +167,8 @@ const SettingsPanel = ({ isOpen, onClose }: SettingsPanelProps) => {
   );
 };
 
-const ToggleItem = ({
-  icon: Icon,
-  label,
-  enabled,
-  onToggle,
-}: {
-  icon: React.ElementType;
-  label: string;
-  enabled: boolean;
-  onToggle: () => void;
-}) => (
-  <button
-    onClick={onToggle}
-    className="w-full flex items-center justify-between px-3 py-3 rounded-lg btn-glow glass-card-hover transition-all duration-120 text-foreground"
-  >
+const ToggleItem = ({ icon: Icon, label, enabled, onToggle }: { icon: React.ElementType; label: string; enabled: boolean; onToggle: () => void }) => (
+  <button onClick={onToggle} className="w-full flex items-center justify-between px-3 py-3 rounded-lg btn-glow glass-card-hover transition-all duration-120 text-foreground">
     <div className="flex items-center gap-3">
       <Icon className="w-5 h-5 icon-glow" />
       <span className="text-sm font-medium">{label}</span>
@@ -182,21 +179,10 @@ const ToggleItem = ({
   </button>
 );
 
-const SettingsItem = ({
-  icon: Icon,
-  label,
-  danger,
-  trailing,
-}: {
-  icon: React.ElementType;
-  label: string;
-  danger?: boolean;
-  trailing?: React.ReactNode;
-}) => (
+const SettingsItem = ({ icon: Icon, label, danger, trailing, onClick }: { icon: React.ElementType; label: string; danger?: boolean; trailing?: React.ReactNode; onClick?: () => void }) => (
   <button
-    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg btn-glow glass-card-hover transition-all duration-120 ${
-      danger ? "text-destructive" : "text-foreground"
-    }`}
+    onClick={onClick}
+    className={`w-full flex items-center justify-between px-3 py-3 rounded-lg btn-glow glass-card-hover transition-all duration-120 ${danger ? "text-destructive" : "text-foreground"}`}
   >
     <div className="flex items-center gap-3">
       <Icon className="w-5 h-5 icon-glow" />
