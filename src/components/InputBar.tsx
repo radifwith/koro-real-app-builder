@@ -3,7 +3,7 @@ import { Send, Paperclip, Mic, X, FileText, ImageIcon } from "lucide-react";
 import type { AIMode } from "./ModeSelector";
 
 interface InputBarProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, file?: File | null) => void;
   onVoiceActivate: () => void;
   activeMode: AIMode;
 }
@@ -15,7 +15,7 @@ const InputBar = ({ onSend, onVoiceActivate, activeMode }: InputBarProps) => {
 
   const handleSend = () => {
     if (!text.trim() && !attachedFile) return;
-    onSend(text.trim());
+    onSend(text.trim(), attachedFile);
     setText("");
     setAttachedFile(null);
   };
@@ -36,7 +36,6 @@ const InputBar = ({ onSend, onVoiceActivate, activeMode }: InputBarProps) => {
     if (file) {
       setAttachedFile(file);
     }
-    // Reset input so same file can be selected again
     e.target.value = "";
   };
 
@@ -83,7 +82,7 @@ const InputBar = ({ onSend, onVoiceActivate, activeMode }: InputBarProps) => {
           ref={fileInputRef}
           type="file"
           className="hidden"
-          accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.pptx,.zip"
+          accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.pptx,.zip,.json,.md,.js,.ts,.py,.html,.css,.xml,.yaml,.yml,.log"
           onChange={handleFileChange}
         />
         <button
