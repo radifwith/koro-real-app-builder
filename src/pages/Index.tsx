@@ -6,18 +6,8 @@ import InputBar from "@/components/InputBar";
 import SettingsPanel from "@/components/SettingsPanel";
 import HistoryPanel from "@/components/HistoryPanel";
 import type { Message } from "@/components/MessageBubble";
-
-const demoResponses: Record<AIMode, string> = {
-  chat: "Hello! I'm Raxzen AI, your multi-modal assistant. I can help you with questions, research, coding, image generation, and much more. How can I help you today?",
-  search: "Here are the top results I found for your query. I've searched across multiple sources to bring you the most relevant information.",
-  deep: "## Deep Research Analysis\n\nBased on my comprehensive analysis across multiple sources:\n\n• **Key Finding 1**: The data strongly suggests a positive correlation.\n• **Key Finding 2**: Recent studies from 2026 confirm earlier hypotheses.\n• **Key Finding 3**: Further investigation recommended in specific sub-domains.\n\nWould you like me to elaborate on any of these points?",
-  image: "I've generated the image based on your description. Here's what I created — you can download it or ask me to regenerate with different parameters.",
-  study: "## Topic Overview\n\nLet me break this down into structured learning sections:\n\n**1. Introduction**\nThis concept forms the foundation of modern computing.\n\n**2. Key Principles**\nThere are three core principles you need to understand.\n\n**3. Applications**\nReal-world applications span across industries.\n\nWould you like to dive deeper into any section?",
-  quiz: "Let's test your knowledge! Here's your first question:",
-  code: 'function fibonacci(n: number): number {\n  if (n <= 1) return n;\n  let a = 0, b = 1;\n  for (let i = 2; i <= n; i++) {\n    [a, b] = [b, a + b];\n  }\n  return b;\n}\n\n// Example usage:\nconsole.log(fibonacci(10)); // Output: 55',
-  voice: "I heard you! Processing your voice input now...",
-  file: "I've analyzed your file. Here's a summary:\n\n• **Type**: PDF Document\n• **Pages**: 12\n• **Key Topics**: AI Architecture, API Integration\n• **Summary**: The document outlines a comprehensive system design...\n\nWould you like me to explain any specific section?",
-};
+import { streamChat } from "@/lib/streamChat";
+import { toast } from "sonner";
 
 export interface ChatSession {
   id: string;
@@ -53,7 +43,6 @@ const Index = () => {
   }, [chatHistory]);
 
   const handleModeChange = useCallback((mode: AIMode) => {
-    // Save current chat if it has messages
     if (messages.length > 0) {
       const session: ChatSession = {
         id: Date.now().toString(),
@@ -72,27 +61,92 @@ const Index = () => {
     }
   }, [messages, activeMode]);
 
-  const handleSend = useCallback((text: string) => {
+  const handleSend = useCallback((text: string, file?: File | null) => {
+    // Build user message content
+    let userContent = text;
+    if (file) {
+      userContent = text
+        ? `[File: ${file.name}]\n\n${text}`
+        : `[File: ${file.name}] Please analyze this file.`;
+    }
+
     const userMsg: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: text,
+      content: userContent,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
-    setTimeout(() => {
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "ai",
-        content: demoResponses[activeMode],
-        timestamp: new Date(),
+    // Build conversation history for AI
+    const aiMessages = [
+      ...messages.map((m) => ({
+        role: m.role === "ai" ? "assistant" as const : "user" as const,
+        content: m.content,
+      })),
+      { role: "user" as const, content: userContent },
+    ];
+
+    // If file attached, read it and include in context
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileContent = e.target?.result as string;
+        // For text files, include content directly
+        if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
+          aiMessages[aiMessages.length - 1].content = `File: ${file.name}\n\nContent:\n${fileContent}\n\n${text || "Please analyze this file."}`;
+        } else {
+          aiMessages[aiMessages.length - 1].content = `File: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(1)} KB)\n\n${text || "Please analyze this file."}`;
+        }
+        startStreaming(aiMessages);
       };
-      setMessages((prev) => [...prev, aiMsg]);
-      setIsTyping(false);
-    }, 1200);
-  }, [activeMode]);
+      if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
+        reader.readAsText(file);
+      } else {
+        // For binary files, just send metadata
+        startStreaming(aiMessages);
+      }
+    } else {
+      startStreaming(aiMessages);
+    }
+  }, [messages, activeMode]);
+
+  const startStreaming = (aiMessages: { role: "user" | "assistant"; content: string }[]) => {
+    let assistantSoFar = "";
+
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "ai") {
+          return prev.map((m, i) =>
+            i === prev.length - 1 ? { ...m, content: assistantSoFar } : m
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "ai" as const,
+            content: assistantSoFar,
+            timestamp: new Date(),
+          },
+        ];
+      });
+    };
+
+    streamChat({
+      messages: aiMessages,
+      mode: activeMode,
+      onDelta: (chunk) => upsertAssistant(chunk),
+      onDone: () => setIsTyping(false),
+      onError: (error) => {
+        setIsTyping(false);
+        toast.error(error);
+      },
+    });
+  };
 
   const handleLoadSession = useCallback((session: ChatSession) => {
     setActiveMode(session.mode);
