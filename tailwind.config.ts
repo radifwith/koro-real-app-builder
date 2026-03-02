@@ -99,6 +99,14 @@ export default {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-100%)" },
         },
+        "slide-in-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -108,8 +116,10 @@ export default {
         "fade-in-up": "fade-in-up 180ms ease-out",
         "slide-in-left": "slide-in-left 250ms ease-out",
         "slide-out-left": "slide-out-left 250ms ease-in",
+        "slide-in-right": "slide-in-right 250ms ease-out",
+        "fade-in": "fade-in 200ms ease-out",
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
 } satisfies Config;
