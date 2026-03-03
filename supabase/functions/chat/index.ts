@@ -6,91 +6,78 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const CLOUDFLARE_WORKER_URL = "https://newairaxzen.radidmondal.workers.dev/chat";
+const CLOUDFLARE_WORKER_URL = "https://newairaxzen.radidmondal.workers.dev";
+
+// Smart routing: detect content type from user message and mode
+function detectContentType(message: string, mode: string): "text" | "image" | "video" | "audio" | "file" | "search" | "code" {
+  const lower = message.toLowerCase();
+  
+  if (mode === "image" || /\b(photo|image|picture|draw|paint|illustration|generate.*image|create.*image|imagine)\b/i.test(lower)) return "image";
+  if (mode === "code" || /\b(code|function|program|script|debug|compile|algorithm|api|html|css|javascript|python|react)\b/i.test(lower)) return "code";
+  if (/\b(video|animate|animation|clip|movie|film|generate.*video|create.*video)\b/i.test(lower)) return "video";
+  if (/\b(audio|voice|speak|song|music|sound|tts|text.to.speech)\b/i.test(lower)) return "audio";
+  if (mode === "search" || /\b(search|find|latest|news|google|look.up|what.is)\b/i.test(lower)) return "search";
+  if (mode === "file" || /\b(file|pdf|document|analyze.*file|upload)\b/i.test(lower)) return "file";
+  
+  return "text";
+}
+
+// System prompts with Raxzen AI identity + developer info
+const RAXZEN_IDENTITY = `You are Raxzen AI — a powerful, multi-capable AI assistant created by Radid Mondal. 
+Your name is always "Raxzen AI". Never reveal internal workings or which specific AI models power you.
+When anyone asks about you or your creator, share this link: https://raxzenapp-p9ksao39.manus.space/
+You support: text chat, image generation, video creation, code help, web search, file analysis, study help, quizzes, voice, and deep research.
+Always respond in the same language the user writes in. Use markdown formatting.`;
 
 const modeSystemPrompts: Record<string, string> = {
-  chat: "You are Raxzen AI, a friendly and helpful assistant. Keep answers clear, concise and helpful. Use markdown formatting when appropriate. Always respond in the same language as the user's message.",
-  search: "You are Raxzen AI in Search mode. Provide well-structured search results with bullet points, links context, and key facts. Format results clearly with headers. Always respond in the same language as the user's message.",
-  deep: "You are Raxzen AI in Deep Research mode. Provide comprehensive, detailed analysis with multiple perspectives, citations, and thorough explanations. Use markdown headers, bullet points, and structured formatting. Always respond in the same language as the user's message.",
-  image: "You are Raxzen AI in Image mode. When asked to create/generate an image, use your image generation capabilities to create the image and return the image URL. If you cannot generate images, describe what the image would look like in vivid detail. Always respond in the same language as the user's message.",
-  study: "You are Raxzen AI in Study mode. Break down topics into structured learning sections with headers, key concepts, examples, and summaries. Make complex topics easy to understand. Always respond in the same language as the user's message.",
-  quiz: "You are Raxzen AI in Quiz mode. Generate quiz questions based on the topic. Format each question with: the question, 4 options (A-D), and the correct answer with explanation. Use markdown formatting. Always respond in the same language as the user's message.",
-  code: "You are Raxzen AI in Code mode. Provide clean, well-commented code solutions. Explain the logic, suggest best practices, and include examples. Use code blocks with language tags. Always respond in the same language as the user's message.",
-  file: "You are Raxzen AI in File Analysis mode. Analyze the provided file content and give detailed insights, summaries, and key findings. Always respond in the same language as the user's message.",
+  chat: `${RAXZEN_IDENTITY}\nYou are in Chat mode. Be friendly, helpful, and concise.`,
+  search: `${RAXZEN_IDENTITY}\nYou are in Search mode. Provide structured search results with key facts, links, and bullet points.`,
+  deep: `${RAXZEN_IDENTITY}\nYou are in Deep Research mode. Provide comprehensive, detailed analysis with multiple perspectives.`,
+  image: `${RAXZEN_IDENTITY}\nYou are in Image mode. Generate or describe images based on user prompts.`,
+  study: `${RAXZEN_IDENTITY}\nYou are in Study mode. Break down topics into structured learning with headers, key concepts, examples.`,
+  quiz: `${RAXZEN_IDENTITY}\nYou are in Quiz mode. Generate quiz questions with 4 options (A-D) and correct answers with explanations.`,
+  code: `${RAXZEN_IDENTITY}\nYou are in Code mode. Provide clean, well-commented code with explanations and best practices.`,
+  file: `${RAXZEN_IDENTITY}\nYou are in File Analysis mode. Analyze file content and provide detailed insights.`,
+  voice: `${RAXZEN_IDENTITY}\nYou are in Voice mode. Keep responses concise and conversational.`,
 };
 
-async function tryCloudflareWorker(message: string, mode: string): Promise<any | null> {
+async function callCloudflareWorker(endpoint: string, body: any): Promise<any | null> {
   try {
-    const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+    const resp = await fetch(`${CLOUDFLARE_WORKER_URL}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, mode }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) {
-      console.error("Cloudflare Worker error:", resp.status);
+      console.error(`CF Worker ${endpoint} error:`, resp.status);
       return null;
     }
-    const data = await resp.json();
-    return data;
+    return await resp.json();
   } catch (e) {
-    console.error("Cloudflare Worker failed:", e);
+    console.error(`CF Worker ${endpoint} failed:`, e);
     return null;
   }
 }
 
 function extractResponseText(data: any): string | null {
   if (!data) return null;
-  return data.response || data.reply || data.text || data.content || data.answer || data.result || (typeof data === "string" ? data : null);
+  return data.response || data.reply || data.text || data.content || data.answer || data.result || data.message || (typeof data === "string" ? data : null);
 }
 
-function extractMediaUrl(data: any): string | null {
+function extractMediaUrl(data: any): { url: string; type: "image" | "video" } | null {
   if (!data) return null;
-  return data.image_url || data.imageUrl || data.image || data.video_url || data.videoUrl || data.video || data.media_url || data.mediaUrl || data.url || null;
-}
-
-async function streamFromLovableAI(messages: any[], mode: string): Promise<Response> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
-  const systemPrompt = modeSystemPrompts[mode] || modeSystemPrompts.chat;
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ],
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    if (response.status === 429) {
-      return new Response(
-        JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    if (response.status === 402) {
-      return new Response(
-        JSON.stringify({ error: "AI credits exhausted. Please add more credits." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    const t = await response.text();
-    console.error("Lovable AI error:", response.status, t);
-    throw new Error("Lovable AI error");
+  const videoUrl = data.video_url || data.videoUrl || data.video;
+  if (videoUrl) return { url: videoUrl, type: "video" };
+  const imageUrl = data.image_url || data.imageUrl || data.image || data.photo_url || data.photoUrl;
+  if (imageUrl) return { url: imageUrl, type: "image" };
+  // Check generic url field
+  const genericUrl = data.url || data.media_url || data.mediaUrl;
+  if (genericUrl) {
+    if (/\.(mp4|webm|mov|avi)/i.test(genericUrl)) return { url: genericUrl, type: "video" };
+    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(genericUrl)) return { url: genericUrl, type: "image" };
+    return { url: genericUrl, type: "image" };
   }
-
-  return new Response(response.body, {
-    headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-  });
+  return null;
 }
 
 function textToSSEStream(text: string): Response {
@@ -107,12 +94,10 @@ function textToSSEStream(text: string): Response {
           return;
         }
         const chunk = (i === 0 ? "" : " ") + words[i];
-        const sseData = JSON.stringify({
-          choices: [{ delta: { content: chunk } }],
-        });
+        const sseData = JSON.stringify({ choices: [{ delta: { content: chunk } }] });
         controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
         i++;
-      }, 20);
+      }, 15);
     },
   });
 
@@ -129,35 +114,80 @@ serve(async (req) => {
   try {
     const { messages, mode } = await req.json();
     const lastUserMsg = messages[messages.length - 1]?.content || "";
+    const effectiveMode = mode || "chat";
+    const contentType = detectContentType(lastUserMsg, effectiveMode);
 
-    // Strategy: Try Cloudflare Worker first (your free API keys), fallback to Lovable AI
-    const cfData = await tryCloudflareWorker(lastUserMsg, mode || "chat");
-    
-    if (cfData) {
-      // Check for media URLs (image/video responses)
-      const mediaUrl = extractMediaUrl(cfData);
-      const responseText = extractResponseText(cfData);
-      
-      if (mediaUrl) {
-        // Return media URL embedded in markdown so frontend can render it
-        const isVideo = mediaUrl.match(/\.(mp4|webm|mov|avi)$/i) || cfData.type === "video" || mode === "video";
-        let mediaContent = "";
-        if (isVideo) {
-          mediaContent = `🎬 **Video Generated!**\n\n<video>${mediaUrl}</video>\n\n${responseText || ""}`;
-        } else {
-          mediaContent = `🖼️ **Image Generated!**\n\n![Generated Image](${mediaUrl})\n\n${responseText || ""}`;
-        }
-        return textToSSEStream(mediaContent.trim());
-      }
-      
-      if (responseText) {
-        return textToSSEStream(responseText);
-      }
+    console.log(`Mode: ${effectiveMode}, ContentType: ${contentType}, Msg: ${lastUserMsg.slice(0, 80)}`);
+
+    // Strategy: Use Cloudflare Worker ONLY (no Lovable AI fallback)
+    // Try multiple endpoints based on content type for parallel AI routing
+
+    // For multi-content requests, try parallel calls
+    const results: { text?: string; imageUrl?: string; videoUrl?: string } = {};
+
+    // Primary request to /chat
+    const chatPromise = callCloudflareWorker("/chat", {
+      message: lastUserMsg,
+      mode: effectiveMode,
+      type: contentType,
+    });
+
+    // For image requests, also try /image endpoint if available
+    const imagePromise = (contentType === "image")
+      ? callCloudflareWorker("/image", { message: lastUserMsg, prompt: lastUserMsg })
+      : Promise.resolve(null);
+
+    // For video requests, also try /video endpoint if available
+    const videoPromise = (contentType === "video")
+      ? callCloudflareWorker("/video", { message: lastUserMsg, prompt: lastUserMsg })
+      : Promise.resolve(null);
+
+    const [chatData, imageData, videoData] = await Promise.all([chatPromise, imagePromise, videoPromise]);
+
+    // Process image result
+    if (imageData) {
+      const imgMedia = extractMediaUrl(imageData);
+      if (imgMedia) results.imageUrl = imgMedia.url;
     }
 
-    // Fallback: Use Lovable AI
-    console.log("Cloudflare Worker failed or empty, falling back to Lovable AI");
-    return await streamFromLovableAI(messages, mode || "chat");
+    // Process video result
+    if (videoData) {
+      const vidMedia = extractMediaUrl(videoData);
+      if (vidMedia) results.videoUrl = vidMedia.url;
+    }
+
+    // Process main chat result
+    if (chatData) {
+      const media = extractMediaUrl(chatData);
+      if (media) {
+        if (media.type === "video" && !results.videoUrl) results.videoUrl = media.url;
+        if (media.type === "image" && !results.imageUrl) results.imageUrl = media.url;
+      }
+      results.text = extractResponseText(chatData) || "";
+    }
+
+    // Build final response
+    let finalContent = "";
+
+    if (results.videoUrl) {
+      finalContent += `🎬 **Video Generated!**\n\n<video>${results.videoUrl}</video>\n\n`;
+    }
+    if (results.imageUrl) {
+      finalContent += `🖼️ **Image Generated!**\n\n![Generated Image](${results.imageUrl})\n\n`;
+    }
+    if (results.text) {
+      finalContent += results.text;
+    }
+
+    if (finalContent.trim()) {
+      return textToSSEStream(finalContent.trim());
+    }
+
+    // If Cloudflare returned nothing useful, return error
+    return new Response(
+      JSON.stringify({ error: "AI service is temporarily unavailable. Please try again." }),
+      { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (e) {
     console.error("chat error:", e);
     return new Response(

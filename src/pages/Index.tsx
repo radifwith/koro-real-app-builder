@@ -172,6 +172,7 @@ const Index = () => {
         activeMode={activeMode}
         voiceActive={voiceActive}
         onVoiceClose={() => setVoiceActive(false)}
+        onSuggestionClick={(text) => handleSend(text)}
       />
       <InputBar
         onSend={handleSend}
