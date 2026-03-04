@@ -9,10 +9,10 @@ interface TopBarProps {
 const TopBar = ({ onSettingsClick, onHistoryClick }: TopBarProps) => {
   return (
     <header className="h-14 flex items-center justify-between px-4 glass-card border-b border-border/50">
-      <div className="flex items-center gap-2.5">
+      <a href="https://raxzenapp-p9ksao39.manus.space/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
         <img src={raxzenLogo} alt="Raxzen AI" className="w-9 h-9 rounded-lg glow-blue icon-glow" />
         <h1 className="text-lg font-semibold text-foreground text-glow">Raxzen AI</h1>
-      </div>
+      </a>
       <div className="flex items-center gap-1">
         <button
           onClick={onHistoryClick}

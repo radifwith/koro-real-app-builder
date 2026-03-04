@@ -28,6 +28,10 @@ const Index = () => {
     const saved = localStorage.getItem("raxzen-history");
     return saved ? JSON.parse(saved) : [];
   });
+  const [pinnedSessions, setPinnedSessions] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem("raxzen-pinned");
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
 
   // Apply mode-specific colors as CSS variables
   useEffect(() => {
@@ -37,10 +41,22 @@ const Index = () => {
     document.documentElement.style.setProperty("--ring", colors.hue);
   }, [activeMode]);
 
-  // Save history to localStorage
+  // Save history & pins to localStorage
   useEffect(() => {
     localStorage.setItem("raxzen-history", JSON.stringify(chatHistory));
   }, [chatHistory]);
+
+  useEffect(() => {
+    localStorage.setItem("raxzen-pinned", JSON.stringify([...pinnedSessions]));
+  }, [pinnedSessions]);
+
+  const handlePinSession = useCallback((id: string) => {
+    setPinnedSessions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   const handleModeChange = useCallback((mode: AIMode) => {
     if (messages.length > 0) {
@@ -189,6 +205,8 @@ const Index = () => {
         onClose={() => setHistoryOpen(false)}
         sessions={chatHistory}
         onLoadSession={handleLoadSession}
+        pinnedIds={pinnedSessions}
+        onPinSession={handlePinSession}
       />
     </div>
   );
