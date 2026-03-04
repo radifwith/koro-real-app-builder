@@ -54,7 +54,7 @@ const modeSystemPrompts: Record<string, string> = {
   deep: `${RAXZEN_IDENTITY}\nYou are in Deep Research mode. Provide comprehensive, detailed analysis with multiple perspectives.`,
   image: `${RAXZEN_IDENTITY}\nYou are in Image mode. Generate or describe images based on user prompts.`,
   study: `${RAXZEN_IDENTITY}\nYou are in Study mode. Break down topics into structured learning with headers, key concepts, examples.`,
-  quiz: `${RAXZEN_IDENTITY}\nYou are in Quiz mode. Generate quiz questions with 4 options (A-D) and correct answers with explanations.`,
+  quiz: `${RAXZEN_IDENTITY}\nYou are in Quiz mode. You MUST format every response as a quiz question using EXACTLY this structure:\n\nQUESTION: [Your question here]\nA) [Option A]\nB) [Option B]\nC) [Option C]\nD) [Option D]\nANSWER: [Correct letter, e.g. B]\nEXPLANATION: [Brief explanation of why this is correct]\n\nAlways follow this exact format. Never deviate. One question per response unless asked for more.`,
   code: `${RAXZEN_IDENTITY}\nYou are in Code mode. Provide clean, well-commented code with explanations and best practices.`,
   file: `${RAXZEN_IDENTITY}\nYou are in File Analysis mode. Analyze file content and provide detailed insights.`,
   voice: `${RAXZEN_IDENTITY}\nYou are in Voice mode. Keep responses concise and conversational.`,
