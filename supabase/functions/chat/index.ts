@@ -6,79 +6,46 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const CLOUDFLARE_WORKER_URL = "https://newairaxzen.radidmondal.workers.dev";
+const WORKER_URL = "https://newairaxzen.radidmondal.workers.dev";
 
-// Smart routing: detect content type from user message and mode
-function detectContentType(message: string, mode: string): "text" | "image" | "video" | "audio" | "file" | "search" | "code" {
+// Detect what type of request the user is making
+function detectContentType(message: string, mode: string): string {
   const lower = message.toLowerCase();
-  
+  if (mode === "search" || /\b(search|find|latest|news|google|look.?up)\b/i.test(lower)) return "search";
   if (mode === "image" || /\b(photo|image|picture|draw|paint|illustration|generate.*image|create.*image|imagine)\b/i.test(lower)) return "image";
-  if (mode === "code" || /\b(code|function|program|script|debug|compile|algorithm|api|html|css|javascript|python|react)\b/i.test(lower)) return "code";
   if (/\b(video|animate|animation|clip|movie|film|generate.*video|create.*video)\b/i.test(lower)) return "video";
-  if (/\b(audio|voice|speak|song|music|sound|tts|text.to.speech)\b/i.test(lower)) return "audio";
-  if (mode === "search" || /\b(search|find|latest|news|google|look.up|what.is)\b/i.test(lower)) return "search";
-  if (mode === "file" || /\b(file|pdf|document|analyze.*file|upload)\b/i.test(lower)) return "file";
-  
+  if (/\b(audio|voice|speak|song|music|sound|tts|text.to.speech|বলো|বল)\b/i.test(lower)) return "tts";
+  if (mode === "code" || /\b(code|function|program|script|debug|compile|algorithm|api|html|css|javascript|python|react)\b/i.test(lower)) return "code";
+  if (/\b(scrape|crawl|extract.*website|web.*data)\b/i.test(lower)) return "scrape";
   return "text";
 }
 
-// Raxzen AI — Full Identity & Behavior Configuration
-const RAXZEN_IDENTITY = `You are Raxzen AI — a powerful, intelligent, multi-capable AI assistant.
-
-## IDENTITY RULES (CRITICAL — NEVER BREAK):
-- Your name is **Raxzen AI**. Always. No exceptions.
-- You are NOT Gemini, NOT GPT, NOT Meta AI, NOT Claude, NOT any other AI company's product.
-- If anyone asks who made you, who owns you, your developer, creator, or company — respond: "I am Raxzen AI, developed and managed under the Raxzen system."
-- If they want more details, provide ONLY this link: https://raxzenapp-p9ksao39.manus.space/
-- NEVER mention Google, OpenAI, Meta, Anthropic, Mistral, or any external AI provider — even if directly asked.
-- If pressed, say: "I operate independently as Raxzen AI. For more info, visit https://raxzenapp-p9ksao39.manus.space/"
-
-## PERSONALITY & TONE:
-- Friendly, supportive, and respectful — but also confident and professional.
-- Communication style: clear, structured, polished, and organized.
-- Be creative, detailed when needed, realistic, and always well-formatted.
-- Use markdown formatting: headers, bullet points, bold, code blocks, etc.
-- Always respond in the SAME language the user writes in.
-
-## CAPABILITIES:
-You support: text chat, image generation, video creation, code assistance, web search, file/document analysis, study help, quizzes, voice interaction, and deep research.
-
-## OUTPUT CONSISTENCY:
-- Every response must follow the same tone, personality, identity, and structured style.
-- No variation. No leakage of original AI provider information. Ever.
-- Quality target: deliver responses that feel premium, polished, and 8-9/10 level.`;
-
-const modeSystemPrompts: Record<string, string> = {
-  chat: `${RAXZEN_IDENTITY}\nYou are in Chat mode. Be friendly, helpful, and concise.`,
-  search: `${RAXZEN_IDENTITY}\nYou are in Search mode. Provide structured search results with key facts, links, and bullet points.`,
-  deep: `${RAXZEN_IDENTITY}\nYou are in Deep Research mode. Provide comprehensive, detailed analysis with multiple perspectives.`,
-  image: `${RAXZEN_IDENTITY}\nYou are in Image mode. Generate or describe images based on user prompts.`,
-  study: `${RAXZEN_IDENTITY}\nYou are in Study mode. Break down topics into structured learning with headers, key concepts, examples.`,
-  quiz: `${RAXZEN_IDENTITY}\nYou are in Quiz mode. You MUST format every response as a quiz question using EXACTLY this structure:\n\nQUESTION: [Your question here]\nA) [Option A]\nB) [Option B]\nC) [Option C]\nD) [Option D]\nANSWER: [Correct letter, e.g. B]\nEXPLANATION: [Brief explanation of why this is correct]\n\nAlways follow this exact format. Never deviate. One question per response unless asked for more.`,
-  code: `${RAXZEN_IDENTITY}\nYou are in Code mode. Provide clean, well-commented code with explanations and best practices.`,
-  file: `${RAXZEN_IDENTITY}\nYou are in File Analysis mode. Analyze file content and provide detailed insights.`,
-  voice: `${RAXZEN_IDENTITY}\nYou are in Voice mode. Keep responses concise and conversational.`,
-};
-
-async function callCloudflareWorker(endpoint: string, body: any): Promise<any | null> {
+// Call the Cloudflare Worker
+async function callWorker(endpoint: string, body: any): Promise<any | null> {
   try {
-    const resp = await fetch(`${CLOUDFLARE_WORKER_URL}${endpoint}`, {
+    const resp = await fetch(`${WORKER_URL}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!resp.ok) {
-      console.error(`CF Worker ${endpoint} error:`, resp.status);
+      console.error(`Worker ${endpoint} error: ${resp.status}`);
       return null;
     }
-    return await resp.json();
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await resp.json();
+    }
+    // For binary responses (audio, images), return as base64
+    const buffer = await resp.arrayBuffer();
+    return { _binary: true, data: btoa(String.fromCharCode(...new Uint8Array(buffer))), contentType };
   } catch (e) {
-    console.error(`CF Worker ${endpoint} failed:`, e);
+    console.error(`Worker ${endpoint} failed:`, e);
     return null;
   }
 }
 
-function extractResponseText(data: any): string | null {
+function extractText(data: any): string | null {
   if (!data) return null;
   return data.response || data.reply || data.text || data.content || data.answer || data.result || data.message || (typeof data === "string" ? data : null);
 }
@@ -89,17 +56,16 @@ function extractMediaUrl(data: any): { url: string; type: "image" | "video" } | 
   if (videoUrl) return { url: videoUrl, type: "video" };
   const imageUrl = data.image_url || data.imageUrl || data.image || data.photo_url || data.photoUrl;
   if (imageUrl) return { url: imageUrl, type: "image" };
-  // Check generic url field
   const genericUrl = data.url || data.media_url || data.mediaUrl;
   if (genericUrl) {
     if (/\.(mp4|webm|mov|avi)/i.test(genericUrl)) return { url: genericUrl, type: "video" };
-    if (/\.(jpg|jpeg|png|gif|webp|svg|bmp)/i.test(genericUrl)) return { url: genericUrl, type: "image" };
     return { url: genericUrl, type: "image" };
   }
   return null;
 }
 
-function textToSSEStream(text: string): Response {
+// Convert text to SSE stream for frontend consumption
+function textToSSE(text: string): Response {
   const encoder = new TextEncoder();
   const words = text.split(" ");
   const stream = new ReadableStream({
@@ -119,7 +85,6 @@ function textToSSEStream(text: string): Response {
       }, 15);
     },
   });
-
   return new Response(stream, {
     headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
   });
@@ -132,62 +97,130 @@ serve(async (req) => {
 
   try {
     const { messages, mode } = await req.json();
-    const lastUserMsg = messages[messages.length - 1]?.content || "";
+    const lastMsg = messages[messages.length - 1]?.content || "";
     const effectiveMode = mode || "chat";
-    const contentType = detectContentType(lastUserMsg, effectiveMode);
+    const contentType = detectContentType(lastMsg, effectiveMode);
 
-    console.log(`Mode: ${effectiveMode}, ContentType: ${contentType}, Msg: ${lastUserMsg.slice(0, 80)}`);
+    console.log(`Mode: ${effectiveMode}, Type: ${contentType}, Msg: ${lastMsg.slice(0, 80)}`);
 
-    // Strategy: Use Cloudflare Worker ONLY (no Lovable AI fallback)
-    // Try multiple endpoints based on content type for parallel AI routing
-
-    // For multi-content requests, try parallel calls
+    // Route to the correct Cloudflare Worker endpoint
     const results: { text?: string; imageUrl?: string; videoUrl?: string } = {};
 
-    // Primary request to /chat
-    const chatPromise = callCloudflareWorker("/chat", {
-      message: lastUserMsg,
-      mode: effectiveMode,
-      type: contentType,
-    });
-
-    // For image requests, also try /image endpoint if available
-    const imagePromise = (contentType === "image")
-      ? callCloudflareWorker("/image", { message: lastUserMsg, prompt: lastUserMsg })
-      : Promise.resolve(null);
-
-    // For video requests, also try /video endpoint if available
-    const videoPromise = (contentType === "video")
-      ? callCloudflareWorker("/video", { message: lastUserMsg, prompt: lastUserMsg })
-      : Promise.resolve(null);
-
-    const [chatData, imageData, videoData] = await Promise.all([chatPromise, imagePromise, videoPromise]);
-
-    // Process image result
-    if (imageData) {
-      const imgMedia = extractMediaUrl(imageData);
-      if (imgMedia) results.imageUrl = imgMedia.url;
-    }
-
-    // Process video result
-    if (videoData) {
-      const vidMedia = extractMediaUrl(videoData);
-      if (vidMedia) results.videoUrl = vidMedia.url;
-    }
-
-    // Process main chat result
-    if (chatData) {
-      const media = extractMediaUrl(chatData);
-      if (media) {
-        if (media.type === "video" && !results.videoUrl) results.videoUrl = media.url;
-        if (media.type === "image" && !results.imageUrl) results.imageUrl = media.url;
+    if (contentType === "search") {
+      // Use /search endpoint for search queries
+      const [searchData, chatData] = await Promise.all([
+        callWorker("/search", {
+          query: lastMsg,
+          maxResults: 5,
+          provider: "tavily",
+        }),
+        callWorker("/chat", {
+          message: lastMsg,
+          mode: effectiveMode,
+          type: contentType,
+        }),
+      ]);
+      
+      // Combine search results with AI summary
+      if (searchData) {
+        const searchResults = searchData.results || searchData.data || [];
+        if (Array.isArray(searchResults) && searchResults.length > 0) {
+          let searchText = "🔍 **Search Results:**\n\n";
+          searchResults.forEach((r: any, i: number) => {
+            searchText += `**${i + 1}. [${r.title || "Result"}](${r.url || r.link || "#"})**\n`;
+            if (r.snippet || r.description || r.content) {
+              searchText += `${(r.snippet || r.description || r.content).slice(0, 200)}\n\n`;
+            }
+          });
+          results.text = searchText;
+        }
       }
-      results.text = extractResponseText(chatData) || "";
+      // Add AI commentary
+      const aiText = extractText(chatData);
+      if (aiText) {
+        results.text = (results.text || "") + "\n\n" + aiText;
+      }
+
+    } else if (contentType === "image") {
+      // Use /image-generate for image creation
+      const [imageData, chatData] = await Promise.all([
+        callWorker("/image-generate", {
+          prompt: lastMsg,
+          width: 512,
+          height: 512,
+          provider: "huggingface",
+        }),
+        callWorker("/chat", {
+          message: lastMsg,
+          mode: effectiveMode,
+          type: contentType,
+        }),
+      ]);
+      
+      const media = extractMediaUrl(imageData);
+      if (media) results.imageUrl = media.url;
+      results.text = extractText(chatData) || extractText(imageData) || "";
+
+    } else if (contentType === "video") {
+      // Use /video for video generation
+      const [videoData, chatData] = await Promise.all([
+        callWorker("/video", {
+          prompt: lastMsg,
+          duration: 5,
+          aspectRatio: "16:9",
+        }),
+        callWorker("/chat", {
+          message: lastMsg,
+          mode: effectiveMode,
+          type: contentType,
+        }),
+      ]);
+      
+      const media = extractMediaUrl(videoData);
+      if (media) results.videoUrl = media.url;
+      results.text = extractText(chatData) || extractText(videoData) || "";
+
+    } else if (contentType === "scrape") {
+      // Use /scrape for web scraping
+      const urlMatch = lastMsg.match(/https?:\/\/[^\s]+/);
+      if (urlMatch) {
+        const scrapeData = await callWorker("/scrape", {
+          url: urlMatch[0],
+          format: "markdown",
+          provider: "firecrawl",
+        });
+        results.text = extractText(scrapeData) || (scrapeData?.markdown) || "Could not scrape the page.";
+      } else {
+        const chatData = await callWorker("/chat", {
+          message: lastMsg,
+          mode: effectiveMode,
+          type: contentType,
+        });
+        results.text = extractText(chatData) || "";
+      }
+
+    } else {
+      // Default: /chat for all text, code, study, quiz, deep, file modes
+      const chatData = await callWorker("/chat", {
+        message: lastMsg,
+        mode: effectiveMode,
+        type: contentType,
+        model: effectiveMode === "code" ? "groq" : "groq",
+        fastMode: true,
+      });
+      
+      if (chatData) {
+        const media = extractMediaUrl(chatData);
+        if (media) {
+          if (media.type === "video") results.videoUrl = media.url;
+          else results.imageUrl = media.url;
+        }
+        results.text = extractText(chatData) || "";
+      }
     }
 
     // Build final response
     let finalContent = "";
-
     if (results.videoUrl) {
       finalContent += `🎬 **Video Generated!**\n\n<video>${results.videoUrl}</video>\n\n`;
     }
@@ -199,10 +232,9 @@ serve(async (req) => {
     }
 
     if (finalContent.trim()) {
-      return textToSSEStream(finalContent.trim());
+      return textToSSE(finalContent.trim());
     }
 
-    // If Cloudflare returned nothing useful, return error
     return new Response(
       JSON.stringify({ error: "AI service is temporarily unavailable. Please try again." }),
       { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
