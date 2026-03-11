@@ -214,8 +214,10 @@ serve(async (req) => {
         message: lastMsg,
         mode: effectiveMode,
         type: contentType,
-        model: effectiveMode === "code" ? "groq" : "groq",
+        model: "groq",
         fastMode: true,
+        userId: effectiveUserId,
+        history: messages.slice(-10),
       });
       
       if (chatData) {
