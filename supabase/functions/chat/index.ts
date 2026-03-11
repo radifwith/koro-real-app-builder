@@ -96,12 +96,13 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode } = await req.json();
+    const { messages, mode, userId } = await req.json();
     const lastMsg = messages[messages.length - 1]?.content || "";
     const effectiveMode = mode || "chat";
     const contentType = detectContentType(lastMsg, effectiveMode);
+    const effectiveUserId = userId || "anonymous_" + Math.random().toString(36).slice(2, 10);
 
-    console.log(`Mode: ${effectiveMode}, Type: ${contentType}, Msg: ${lastMsg.slice(0, 80)}`);
+    console.log(`Mode: ${effectiveMode}, Type: ${contentType}, User: ${effectiveUserId}, Msg: ${lastMsg.slice(0, 80)}`);
 
     // Route to the correct Cloudflare Worker endpoint
     const results: { text?: string; imageUrl?: string; videoUrl?: string } = {};
@@ -118,6 +119,8 @@ serve(async (req) => {
           message: lastMsg,
           mode: effectiveMode,
           type: contentType,
+          userId: effectiveUserId,
+          history: messages.slice(-10),
         }),
       ]);
       
@@ -154,6 +157,8 @@ serve(async (req) => {
           message: lastMsg,
           mode: effectiveMode,
           type: contentType,
+          userId: effectiveUserId,
+          history: messages.slice(-10),
         }),
       ]);
       
@@ -173,6 +178,8 @@ serve(async (req) => {
           message: lastMsg,
           mode: effectiveMode,
           type: contentType,
+          userId: effectiveUserId,
+          history: messages.slice(-10),
         }),
       ]);
       
@@ -195,6 +202,8 @@ serve(async (req) => {
           message: lastMsg,
           mode: effectiveMode,
           type: contentType,
+          userId: effectiveUserId,
+          history: messages.slice(-10),
         });
         results.text = extractText(chatData) || "";
       }
@@ -205,8 +214,10 @@ serve(async (req) => {
         message: lastMsg,
         mode: effectiveMode,
         type: contentType,
-        model: effectiveMode === "code" ? "groq" : "groq",
+        model: "groq",
         fastMode: true,
+        userId: effectiveUserId,
+        history: messages.slice(-10),
       });
       
       if (chatData) {
