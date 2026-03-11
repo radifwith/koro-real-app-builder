@@ -2,6 +2,15 @@ type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
+function getUserId(): string {
+  let id = localStorage.getItem("raxzen-user-id");
+  if (!id) {
+    id = "user_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem("raxzen-user-id", id);
+  }
+  return id;
+}
+
 export async function streamChat({
   messages,
   mode,
@@ -22,7 +31,7 @@ export async function streamChat({
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode }),
+      body: JSON.stringify({ messages, mode, userId: getUserId() }),
     });
 
     if (!resp.ok) {
