@@ -157,6 +157,8 @@ serve(async (req) => {
           message: lastMsg,
           mode: effectiveMode,
           type: contentType,
+          userId: effectiveUserId,
+          history: messages.slice(-10),
         }),
       ]);
       
