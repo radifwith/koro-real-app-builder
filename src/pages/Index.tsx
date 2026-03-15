@@ -161,6 +161,7 @@ const Index = () => {
     streamChat({
       messages: aiMessages,
       mode: activeMode,
+      imageData,
       onDelta: (chunk) => upsertAssistant(chunk),
       onDone: () => setIsTyping(false),
       onError: (error) => {
