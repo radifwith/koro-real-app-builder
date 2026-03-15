@@ -42,7 +42,7 @@ async function callWorker(endpoint: string, body: any): Promise<any | null> {
   }
 }
 
-// Upload image as multipart form to /image endpoint
+// Upload image to /image endpoint
 async function analyzeImage(base64: string, imageType: string, userId: string): Promise<any | null> {
   try {
     // Convert base64 to binary
@@ -53,17 +53,25 @@ async function analyzeImage(base64: string, imageType: string, userId: string): 
     }
 
     const ext = imageType.includes("png") ? "png" : "jpg";
+    console.log(`Sending image to worker: ${bytes.length} bytes, type: ${imageType}, user: ${userId}`);
+
+    // Use File + FormData (Deno supports this natively)
+    const file = new File([bytes], `upload.${ext}`, { type: imageType });
     const formData = new FormData();
-    formData.append("image", new Blob([bytes], { type: imageType }), `upload.${ext}`);
+    formData.append("image", file);
     formData.append("user_id", userId);
 
     const resp = await fetch(`${WORKER_URL}/image`, {
       method: "POST",
       body: formData,
+      // Don't set Content-Type - let fetch set it with boundary
     });
 
+    console.log(`Worker /image response status: ${resp.status}`);
+
     if (!resp.ok) {
-      console.error(`Image analyze error: ${resp.status}`);
+      const errText = await resp.text().catch(() => "");
+      console.error(`Image analyze error: ${resp.status} - ${errText}`);
       return null;
     }
     return await resp.json();
