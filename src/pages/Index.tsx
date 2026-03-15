@@ -109,18 +109,24 @@ const Index = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const fileContent = e.target?.result as string;
-        // For text files, include content directly
-        if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
+        // For image files, send base64 to edge function for analysis
+        if (file.type.startsWith("image/")) {
+          const base64Data = fileContent.split(",")[1]; // remove data:image/...;base64, prefix
+          aiMessages[aiMessages.length - 1].content = text || "Please analyze this image.";
+          startStreaming(aiMessages, { imageBase64: base64Data, imageName: file.name, imageType: file.type });
+        } else if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
           aiMessages[aiMessages.length - 1].content = `File: ${file.name}\n\nContent:\n${fileContent}\n\n${text || "Please analyze this file."}`;
+          startStreaming(aiMessages);
         } else {
           aiMessages[aiMessages.length - 1].content = `File: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(1)} KB)\n\n${text || "Please analyze this file."}`;
+          startStreaming(aiMessages);
         }
-        startStreaming(aiMessages);
       };
-      if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
+      if (file.type.startsWith("image/")) {
+        reader.readAsDataURL(file);
+      } else if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
         reader.readAsText(file);
       } else {
-        // For binary files, just send metadata
         startStreaming(aiMessages);
       }
     } else {
