@@ -42,7 +42,7 @@ async function callWorker(endpoint: string, body: any): Promise<any | null> {
   }
 }
 
-// Upload image to /image endpoint using multipart form with proper file
+// Upload image to /image endpoint
 async function analyzeImage(base64: string, imageType: string, userId: string): Promise<any | null> {
   try {
     // Convert base64 to binary
@@ -53,29 +53,18 @@ async function analyzeImage(base64: string, imageType: string, userId: string): 
     }
 
     const ext = imageType.includes("png") ? "png" : "jpg";
-
-    // Build multipart form data manually for better compatibility
-    const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
-    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="upload.${ext}"\r\nContent-Type: ${imageType}\r\n\r\n`;
-    const userIdPart = `\r\n--${boundary}\r\nContent-Disposition: form-data; name="user_id"\r\n\r\n${userId}\r\n--${boundary}--\r\n`;
-
-    const headerBytes = new TextEncoder().encode(fileHeader);
-    const footerBytes = new TextEncoder().encode(userIdPart);
-
-    // Combine all parts into single Uint8Array
-    const body = new Uint8Array(headerBytes.length + bytes.length + footerBytes.length);
-    body.set(headerBytes, 0);
-    body.set(bytes, headerBytes.length);
-    body.set(footerBytes, headerBytes.length + bytes.length);
-
     console.log(`Sending image to worker: ${bytes.length} bytes, type: ${imageType}, user: ${userId}`);
+
+    // Use File + FormData (Deno supports this natively)
+    const file = new File([bytes], `upload.${ext}`, { type: imageType });
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("user_id", userId);
 
     const resp = await fetch(`${WORKER_URL}/image`, {
       method: "POST",
-      headers: {
-        "Content-Type": `multipart/form-data; boundary=${boundary}`,
-      },
-      body: body,
+      body: formData,
+      // Don't set Content-Type - let fetch set it with boundary
     });
 
     console.log(`Worker /image response status: ${resp.status}`);
