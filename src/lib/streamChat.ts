@@ -14,12 +14,14 @@ function getUserId(): string {
 export async function streamChat({
   messages,
   mode,
+  imageData,
   onDelta,
   onDone,
   onError,
 }: {
   messages: Msg[];
   mode: string;
+  imageData?: { imageBase64: string; imageName: string; imageType: string };
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
@@ -31,7 +33,7 @@ export async function streamChat({
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode, userId: getUserId() }),
+      body: JSON.stringify({ messages, mode, userId: getUserId(), imageData }),
     });
 
     if (!resp.ok) {
