@@ -42,7 +42,7 @@ async function callWorker(endpoint: string, body: any): Promise<any | null> {
   }
 }
 
-// Upload image as multipart form to /image endpoint
+// Upload image to /image endpoint using multipart form with proper file
 async function analyzeImage(base64: string, imageType: string, userId: string): Promise<any | null> {
   try {
     // Convert base64 to binary
@@ -53,17 +53,36 @@ async function analyzeImage(base64: string, imageType: string, userId: string): 
     }
 
     const ext = imageType.includes("png") ? "png" : "jpg";
-    const formData = new FormData();
-    formData.append("image", new Blob([bytes], { type: imageType }), `upload.${ext}`);
-    formData.append("user_id", userId);
+
+    // Build multipart form data manually for better compatibility
+    const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
+    const fileHeader = `--${boundary}\r\nContent-Disposition: form-data; name="image"; filename="upload.${ext}"\r\nContent-Type: ${imageType}\r\n\r\n`;
+    const userIdPart = `\r\n--${boundary}\r\nContent-Disposition: form-data; name="user_id"\r\n\r\n${userId}\r\n--${boundary}--\r\n`;
+
+    const headerBytes = new TextEncoder().encode(fileHeader);
+    const footerBytes = new TextEncoder().encode(userIdPart);
+
+    // Combine all parts into single Uint8Array
+    const body = new Uint8Array(headerBytes.length + bytes.length + footerBytes.length);
+    body.set(headerBytes, 0);
+    body.set(bytes, headerBytes.length);
+    body.set(footerBytes, headerBytes.length + bytes.length);
+
+    console.log(`Sending image to worker: ${bytes.length} bytes, type: ${imageType}, user: ${userId}`);
 
     const resp = await fetch(`${WORKER_URL}/image`, {
       method: "POST",
-      body: formData,
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: body,
     });
 
+    console.log(`Worker /image response status: ${resp.status}`);
+
     if (!resp.ok) {
-      console.error(`Image analyze error: ${resp.status}`);
+      const errText = await resp.text().catch(() => "");
+      console.error(`Image analyze error: ${resp.status} - ${errText}`);
       return null;
     }
     return await resp.json();
