@@ -134,7 +134,7 @@ const Index = () => {
     }
   }, [messages, activeMode]);
 
-  const startStreaming = (aiMessages: { role: "user" | "assistant"; content: string }[]) => {
+  const startStreaming = (aiMessages: { role: "user" | "assistant"; content: string }[], imageData?: { imageBase64: string; imageName: string; imageType: string }) => {
     let assistantSoFar = "";
 
     const upsertAssistant = (chunk: string) => {
