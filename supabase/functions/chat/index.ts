@@ -106,6 +106,35 @@ function extractMediaUrl(data: any): { url: string; type: "image" | "video" } | 
   return null;
 }
 
+function buildChatPayload({
+  message,
+  mode,
+  type,
+  model,
+  fastMode,
+  userId,
+  history,
+}: {
+  message: string;
+  mode?: string;
+  type?: string;
+  model?: string;
+  fastMode?: boolean;
+  userId: string;
+  history: Array<{ role: string; content: string }>;
+}) {
+  return {
+    message,
+    mode,
+    type,
+    model,
+    fastMode,
+    userId,
+    user_id: userId,
+    history,
+  };
+}
+
 function textToSSE(text: string): Response {
   const encoder = new TextEncoder();
   const words = text.split(" ");
