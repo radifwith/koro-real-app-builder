@@ -51,8 +51,9 @@ async function callWorker(endpoint: string, body: any): Promise<any | null> {
 // Upload image to /image endpoint
 async function analyzeImage(base64: string, imageType: string, userId: string): Promise<any | null> {
   try {
-    // Convert base64 to binary
-    const binaryStr = atob(base64);
+    // Convert base64/dataURL to binary
+    const normalizedBase64 = (base64.includes(",") ? base64.split(",").pop() || "" : base64).replace(/\s/g, "");
+    const binaryStr = atob(normalizedBase64);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) {
       bytes[i] = binaryStr.charCodeAt(i);
