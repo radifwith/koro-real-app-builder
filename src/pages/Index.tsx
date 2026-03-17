@@ -77,6 +77,41 @@ const Index = () => {
     }
   }, [messages, activeMode]);
 
+  const prepareImageUpload = useCallback(async (file: File, fileDataUrl: string) => {
+    const originalBase64 = fileDataUrl.split(",")[1] || "";
+
+    const needsResize = file.size > 4 * 1024 * 1024;
+    if (!needsResize) {
+      return { imageBase64: originalBase64, imageName: file.name, imageType: file.type || "image/jpeg" };
+    }
+
+    const optimizedDataUrl = await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not process image"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => reject(new Error("Invalid image file"));
+      img.src = fileDataUrl;
+    });
+
+    return {
+      imageBase64: optimizedDataUrl.split(",")[1] || originalBase64,
+      imageName: file.name,
+      imageType: "image/jpeg",
+    };
+  }, []);
+
   const handleSend = useCallback((text: string, file?: File | null) => {
     // Build user message content
     let userContent = text;
@@ -107,19 +142,24 @@ const Index = () => {
     // If file attached, read it and include in context
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const fileContent = e.target?.result as string;
-        // For image files, send base64 to edge function for analysis
-        if (file.type.startsWith("image/")) {
-          const base64Data = fileContent.split(",")[1]; // remove data:image/...;base64, prefix
-          aiMessages[aiMessages.length - 1].content = text || "Please analyze this image.";
-          startStreaming(aiMessages, { imageBase64: base64Data, imageName: file.name, imageType: file.type });
-        } else if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
-          aiMessages[aiMessages.length - 1].content = `File: ${file.name}\n\nContent:\n${fileContent}\n\n${text || "Please analyze this file."}`;
-          startStreaming(aiMessages);
-        } else {
-          aiMessages[aiMessages.length - 1].content = `File: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(1)} KB)\n\n${text || "Please analyze this file."}`;
-          startStreaming(aiMessages);
+      reader.onload = async (e) => {
+        try {
+          const fileContent = e.target?.result as string;
+          // For image files, send base64 to edge function for analysis
+          if (file.type.startsWith("image/")) {
+            aiMessages[aiMessages.length - 1].content = text || "Please analyze this image.";
+            const preparedImage = await prepareImageUpload(file, fileContent);
+            startStreaming(aiMessages, preparedImage);
+          } else if (file.type.startsWith("text/") || file.name.match(/\.(txt|csv|json|md|js|ts|py|html|css|xml|yaml|yml|log)$/i)) {
+            aiMessages[aiMessages.length - 1].content = `File: ${file.name}\n\nContent:\n${fileContent}\n\n${text || "Please analyze this file."}`;
+            startStreaming(aiMessages);
+          } else {
+            aiMessages[aiMessages.length - 1].content = `File: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(1)} KB)\n\n${text || "Please analyze this file."}`;
+            startStreaming(aiMessages);
+          }
+        } catch (error) {
+          setIsTyping(false);
+          toast.error(error instanceof Error ? error.message : "Could not read file");
         }
       };
       if (file.type.startsWith("image/")) {
@@ -132,7 +172,7 @@ const Index = () => {
     } else {
       startStreaming(aiMessages);
     }
-  }, [messages, activeMode]);
+  }, [messages, activeMode, prepareImageUpload]);
 
   const startStreaming = (aiMessages: { role: "user" | "assistant"; content: string }[], imageData?: { imageBase64: string; imageName: string; imageType: string }) => {
     let assistantSoFar = "";
