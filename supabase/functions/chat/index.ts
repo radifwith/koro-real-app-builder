@@ -10,12 +10,18 @@ const WORKER_URL = "https://newairaxzen.radidmondal.workers.dev";
 
 function detectContentType(message: string, mode: string): string {
   const lower = message.toLowerCase();
-  if (mode === "search" || /\b(search|find|latest|news|google|look.?up)\b/i.test(lower)) return "search";
-  if (mode === "image" || /\b(photo|image|picture|draw|paint|illustration|generate.*image|create.*image|imagine)\b/i.test(lower)) return "image";
+
+  // Mode-first routing so "Code" section always uses coding model rules
+  if (mode === "search") return "search";
+  if (mode === "image") return "image";
+  if (mode === "code") return "code";
+
+  if (/\b(search|find|latest|news|google|look.?up)\b/i.test(lower)) return "search";
+  if (/\b(photo|image|picture|draw|paint|illustration|generate.*image|create.*image|imagine)\b/i.test(lower)) return "image";
   if (/\b(video|animate|animation|clip|movie|film|generate.*video|create.*video)\b/i.test(lower)) return "video";
   if (/\b(audio|voice|speak|song|music|sound|tts|text.to.speech|বলো|বল)\b/i.test(lower)) return "tts";
-  if (mode === "code" || /\b(code|function|program|script|debug|compile|algorithm|api|html|css|javascript|python|react)\b/i.test(lower)) return "code";
   if (/\b(scrape|crawl|extract.*website|web.*data)\b/i.test(lower)) return "scrape";
+
   return "text";
 }
 
