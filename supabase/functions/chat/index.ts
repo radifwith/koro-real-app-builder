@@ -171,42 +171,48 @@ serve(async (req) => {
     const effectiveMode = mode || "chat";
     const effectiveUserId = userId || "anonymous_" + Math.random().toString(36).slice(2, 10);
 
+    const history = Array.isArray(messages) ? messages.slice(-10) : [];
+
     // ===== IMAGE UPLOAD ANALYSIS =====
     if (imageData && imageData.imageBase64) {
       console.log(`Image analysis for user: ${effectiveUserId}`);
-      
-      // Step 1: Send image to /image endpoint (Imagga)
+
+      // Request 1: image tags
       const imaggaResult = await analyzeImage(imageData.imageBase64, imageData.imageType || "image/jpeg", effectiveUserId);
-      
       if (!imaggaResult || !imaggaResult.success) {
-        return textToSSE("❌ Image analysis failed. Please try again.");
+        return textToSSE("❌ Image analysis failed. Please try again with another image.");
       }
 
-      // Step 2: Extract tags from Imagga result
       const tags = imaggaResult.result || [];
       const tagSummary = tags
-        .slice(0, 15)
+        .slice(0, 20)
         .map((t: any) => `${t.tag?.en || t.tag} (${Math.round(t.confidence)}%)`)
         .join(", ");
 
-      // Step 3: Send tags + user question to AI (Groq) for a natural description
-      const userQuestion = lastMsg || "Describe this image in detail.";
-      const aiPrompt = `An image was analyzed. The detected tags are: ${tagSummary}. 
+      // Request 2: natural response from chat model
+      const userQuestion = lastMsg || "এই ছবিতে কী আছে?";
+      const analysisModel = effectiveMode === "code" ? "mistral" : "groq";
+      const aiPrompt = `Image tags: ${tagSummary || "No clear tags found"}
 
-Based on these tags, provide a detailed, natural description of what's in the image. Also answer the user's question if any: "${userQuestion}"
+User question: "${userQuestion}"
 
-Reply in a friendly, conversational way. If the user spoke in Bengali/Bangla, reply in Bengali.`;
+Give one clean final answer only (no raw JSON, no technical dump). Explain what is visible in the image and directly answer the user question in natural Bangla if user used Bangla.`;
 
-      const chatData = await callWorker("/chat", {
-        message: aiPrompt,
-        model: "groq",
-        fastMode: true,
-        userId: effectiveUserId,
-        history: [],
-      });
+      const chatData = await callWorker(
+        "/chat",
+        buildChatPayload({
+          message: aiPrompt,
+          mode: effectiveMode,
+          type: "image_analysis",
+          model: analysisModel,
+          fastMode: analysisModel === "groq",
+          userId: effectiveUserId,
+          history,
+        }),
+      );
 
-      const aiDescription = extractText(chatData) || `📸 Image detected: ${tagSummary}`;
-      return textToSSE(`📷 **Image Analyzed!**\n\n${aiDescription}`);
+      const aiDescription = extractText(chatData) || `এই ছবিতে সম্ভবত: ${tagSummary}`;
+      return textToSSE(aiDescription);
     }
 
     // ===== NORMAL ROUTING =====
@@ -218,8 +224,20 @@ Reply in a friendly, conversational way. If the user spoke in Bengali/Bangla, re
     if (contentType === "search") {
       const [searchData, chatData] = await Promise.all([
         callWorker("/search", { query: lastMsg, maxResults: 5, provider: "tavily" }),
-        callWorker("/chat", { message: lastMsg, mode: effectiveMode, type: contentType, userId: effectiveUserId, history: messages.slice(-10) }),
+        callWorker(
+          "/chat",
+          buildChatPayload({
+            message: lastMsg,
+            mode: effectiveMode,
+            type: contentType,
+            model: "groq",
+            fastMode: true,
+            userId: effectiveUserId,
+            history,
+          }),
+        ),
       ]);
+
       if (searchData) {
         const searchResults = searchData.results || searchData.data || [];
         if (Array.isArray(searchResults) && searchResults.length > 0) {
@@ -233,13 +251,25 @@ Reply in a friendly, conversational way. If the user spoke in Bengali/Bangla, re
           results.text = searchText;
         }
       }
+
       const aiText = extractText(chatData);
       if (aiText) results.text = (results.text || "") + "\n\n" + aiText;
 
     } else if (contentType === "image") {
       const [imageData2, chatData] = await Promise.all([
         callWorker("/image-generate", { prompt: lastMsg, width: 512, height: 512, provider: "huggingface" }),
-        callWorker("/chat", { message: lastMsg, mode: effectiveMode, type: contentType, userId: effectiveUserId, history: messages.slice(-10) }),
+        callWorker(
+          "/chat",
+          buildChatPayload({
+            message: lastMsg,
+            mode: effectiveMode,
+            type: contentType,
+            model: "groq",
+            fastMode: true,
+            userId: effectiveUserId,
+            history,
+          }),
+        ),
       ]);
       const media = extractMediaUrl(imageData2);
       if (media) results.imageUrl = media.url;
@@ -248,7 +278,18 @@ Reply in a friendly, conversational way. If the user spoke in Bengali/Bangla, re
     } else if (contentType === "video") {
       const [videoData, chatData] = await Promise.all([
         callWorker("/video", { prompt: lastMsg, duration: 5, aspectRatio: "16:9" }),
-        callWorker("/chat", { message: lastMsg, mode: effectiveMode, type: contentType, userId: effectiveUserId, history: messages.slice(-10) }),
+        callWorker(
+          "/chat",
+          buildChatPayload({
+            message: lastMsg,
+            mode: effectiveMode,
+            type: contentType,
+            model: "groq",
+            fastMode: true,
+            userId: effectiveUserId,
+            history,
+          }),
+        ),
       ]);
       const media = extractMediaUrl(videoData);
       if (media) results.videoUrl = media.url;
@@ -260,39 +301,50 @@ Reply in a friendly, conversational way. If the user spoke in Bengali/Bangla, re
         const scrapeData = await callWorker("/scrape", { url: urlMatch[0], format: "markdown", provider: "firecrawl" });
         results.text = extractText(scrapeData) || scrapeData?.markdown || "Could not scrape the page.";
       } else {
-        const chatData = await callWorker("/chat", { message: lastMsg, mode: effectiveMode, type: contentType, userId: effectiveUserId, history: messages.slice(-10) });
+        const chatData = await callWorker(
+          "/chat",
+          buildChatPayload({
+            message: lastMsg,
+            mode: effectiveMode,
+            type: contentType,
+            model: "groq",
+            fastMode: true,
+            userId: effectiveUserId,
+            history,
+          }),
+        );
         results.text = extractText(chatData) || "";
       }
 
     } else if (contentType === "code") {
-      // Code mode: Try Mistral → SambaNova → Groq
-      let chatData = await callWorker("/chat", {
-        message: lastMsg, mode: effectiveMode, type: "code",
-        model: "mistral", userId: effectiveUserId, history: messages.slice(-10),
-      });
-      if (!chatData || !extractText(chatData)) {
-        console.log("Mistral failed, trying SambaNova...");
-        chatData = await callWorker("/chat", {
-          message: lastMsg, mode: effectiveMode, type: "code",
-          model: "sambanova", userId: effectiveUserId, history: messages.slice(-10),
-        });
-      }
-      if (!chatData || !extractText(chatData)) {
-        console.log("SambaNova failed, trying Groq...");
-        chatData = await callWorker("/chat", {
-          message: lastMsg, mode: effectiveMode, type: "code",
-          model: "groq", fastMode: true, userId: effectiveUserId, history: messages.slice(-10),
-        });
-      }
-      results.text = extractText(chatData) || "";
+      // Code section: Mistral only
+      const chatData = await callWorker(
+        "/chat",
+        buildChatPayload({
+          message: lastMsg,
+          mode: effectiveMode,
+          type: "code",
+          model: "mistral",
+          userId: effectiveUserId,
+          history,
+        }),
+      );
+      results.text = extractText(chatData) || "⚠️ Coding response unavailable right now. Please try again.";
 
     } else {
-      // Default chat: Groq
-      const chatData = await callWorker("/chat", {
-        message: lastMsg, mode: effectiveMode, type: contentType,
-        model: "groq", fastMode: true,
-        userId: effectiveUserId, history: messages.slice(-10),
-      });
+      // Study / education / general modes: Groq
+      const chatData = await callWorker(
+        "/chat",
+        buildChatPayload({
+          message: lastMsg,
+          mode: effectiveMode,
+          type: contentType,
+          model: "groq",
+          fastMode: true,
+          userId: effectiveUserId,
+          history,
+        }),
+      );
       if (chatData) {
         const media = extractMediaUrl(chatData);
         if (media) {
